@@ -1,13 +1,7 @@
+from django.db.models import Count, Q
 from rest_framework import serializers
-
-from ads.models import Ads
 from users.models import Users, Locations
 
-
-class AdsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Ads
-        fields = ["is_published"]
 
 class LocationsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,31 +10,34 @@ class LocationsSerializer(serializers.ModelSerializer):
 
 
 class UsersListSerializer(serializers.ModelSerializer):
-    location_id = LocationsSerializer(many=True)
-    # location_id = serializers.SlugRelatedField(
-    #     many=True,
-    #     read_only=True,
-    #     slug_field="name",
-    # )
-    ads = serializers.SlugRelatedField(
-        many=True,
-        queryset=Ads.objects.all().filter(is_published=True).count(),
-        slug_field="name",
-    )
-    class Meta:
-        model = Users
-        fields = ["id", "first_name", "last_name", "username", "role", "age", "location_id", "ads"]
-
-
-class UsersDetailSerializer(serializers.ModelSerializer):
-    location_id = serializers.SlugRelatedField(
+    locations = serializers.SlugRelatedField(
         many=True,
         read_only=True,
         slug_field="name",
+        source="location_id"
     )
+    total_ads = serializers.SerializerMethodField(method_name="get_total_ads")
+
+    def get_total_ads(self, obj):
+        total_ads = obj.ads.aggregate(num=Count("is_published", filter=Q(is_published=True)))["num"]
+        return total_ads
+
     class Meta:
         model = Users
-        fields = ["id", "first_name", "last_name", "username", "role", "age", "location_id"]
+        fields = ["id", "first_name", "last_name", "username", "role", "age", "locations", "total_ads"]
+
+
+class UsersDetailSerializer(serializers.ModelSerializer):
+    locations = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field="name",
+        source="location_id"
+    )
+
+    class Meta:
+        model = Users
+        fields = ["id", "first_name", "last_name", "username", "role", "age", "locations"]
 
 
 class UsersCreateSerializer(serializers.ModelSerializer):
@@ -51,6 +48,7 @@ class UsersCreateSerializer(serializers.ModelSerializer):
         queryset=Locations.objects.all(),
         slug_field="name"
     )
+
     class Meta:
         model = Users
         fields = '__all__'
@@ -61,7 +59,7 @@ class UsersCreateSerializer(serializers.ModelSerializer):
         return super().is_valid(raise_exception=raise_exception)
 
     def create(self, validated_data):
-        user =Users.objects.create(**validated_data)
+        user = Users.objects.create(**validated_data)
 
         for location in self._locations:
             location_obj, _ = Locations.objects.get_or_create(name=location)
@@ -70,6 +68,7 @@ class UsersCreateSerializer(serializers.ModelSerializer):
 
         return user
 
+
 class UsersUpdateSerializer(serializers.ModelSerializer):
     location_id = serializers.SlugRelatedField(
         required=False,
@@ -77,12 +76,14 @@ class UsersUpdateSerializer(serializers.ModelSerializer):
         queryset=Locations.objects.all(),
         slug_field="name"
     )
+
     class Meta:
         model = Users
         exclude = ["password"]
 
     def is_valid(self, *, raise_exception=False):
-        self._locations = self.initial_data.pop("locations")
+        self._locations = self.initial_data.pop("locations", [])
+
         return super().is_valid(raise_exception=raise_exception)
 
     def save(self, **kwargs):
@@ -94,6 +95,7 @@ class UsersUpdateSerializer(serializers.ModelSerializer):
 
         user.save()
         return user
+
 
 class UsersDeleteSerializer(serializers.ModelSerializer):
     class Meta:

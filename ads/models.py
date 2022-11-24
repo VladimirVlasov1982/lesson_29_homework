@@ -2,8 +2,8 @@ from django.db import models
 from users.models import Users
 
 
-# Модель категории
 class Categories(models.Model):
+    """Модель категории"""
     name = models.CharField(max_length=300)
 
     objects = models.Manager()
@@ -16,8 +16,8 @@ class Categories(models.Model):
         return self.name
 
 
-# Модель объявления
 class Ads(models.Model):
+    """Модель объявления"""
     name = models.CharField(max_length=200)
     author_id = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="ads", null=True)
     price = models.IntegerField()
